@@ -6,6 +6,8 @@ use DDTrace\Integrations\SandboxedIntegration;
 use DDTrace\SpanData;
 use DDTrace\Tag;
 use DDTrace\Type;
+use \PDO;
+use \PDOStatement;
 
 class PDOSandboxedIntegration extends SandboxedIntegration
 {
@@ -47,9 +49,9 @@ class PDOSandboxedIntegration extends SandboxedIntegration
                 return false;
             }
             $span->name = $span->resource = 'PDO.__construct';
-            $span->service = 'PDO';
             $span->type = Type::SQL;
             $span->meta = PDOSandboxedIntegration::storeConnectionParams($this, $args);
+            $span->service = PDOSandboxedIntegration::getServiceNameForPDO($this);
         });
 
         // public int PDO::exec(string $query)
@@ -58,7 +60,7 @@ class PDOSandboxedIntegration extends SandboxedIntegration
                 return false;
             }
             $span->name = 'PDO.exec';
-            $span->service = 'PDO';
+            $span->service = PDOSandboxedIntegration::getServiceNameForPDO($this);
             $span->type = Type::SQL;
             $span->resource = $args[0];
             if (is_numeric($retval)) {
@@ -81,7 +83,7 @@ class PDOSandboxedIntegration extends SandboxedIntegration
                 return false;
             }
             $span->name = 'PDO.query';
-            $span->service = 'PDO';
+            $span->service = PDOSandboxedIntegration::getServiceNameForPDO($this);
             $span->type = Type::SQL;
             $span->resource = $args[0];
             if ($retval instanceof \PDOStatement) {
@@ -101,7 +103,7 @@ class PDOSandboxedIntegration extends SandboxedIntegration
                 return false;
             }
             $span->name = $span->resource = 'PDO.commit';
-            $span->service = 'PDO';
+            $span->service = PDOSandboxedIntegration::getServiceNameForPDO($this);
             $span->type = Type::SQL;
             PDOSandboxedIntegration::setConnectionTags($this, $span);
         });
@@ -112,7 +114,7 @@ class PDOSandboxedIntegration extends SandboxedIntegration
                 return false;
             }
             $span->name = 'PDO.prepare';
-            $span->service = 'PDO';
+            $span->service = PDOSandboxedIntegration::getServiceNameForPDO($this);
             $span->type = Type::SQL;
             $span->resource = $args[0];
             PDOSandboxedIntegration::setConnectionTags($this, $span);
@@ -125,7 +127,7 @@ class PDOSandboxedIntegration extends SandboxedIntegration
                 return false;
             }
             $span->name = 'PDOStatement.execute';
-            $span->service = 'PDO';
+            $span->service = PDOSandboxedIntegration::getServiceNameForStatement($this);
             $span->type = Type::SQL;
             $span->resource = $this->queryString;
             if ($retval === true) {
@@ -202,8 +204,34 @@ class PDOSandboxedIntegration extends SandboxedIntegration
         if (isset($constructorArgs[1])) {
             $tags['db.user'] = $constructorArgs[1];
         }
+
+        $tags[Tag::SERVICE_NAME] = static::dsnToServiceName($constructorArgs[0], $tags);
+
         self::$connections[spl_object_hash($pdo)] = $tags;
         return $tags;
+    }
+
+    /**
+     * Determine the service name to use
+     *
+     * If it's sqlite use the db file name if there is one
+     * If the dsn is a service name - pull that out
+     * Otherwiser look for the constant DEFAULT_DATABASE_SERVICE_NAME
+     *
+     * Fallback to using 'PDO'
+     */
+    protected static function dsnToServiceName(string $dsn, array $tags): string
+    {
+        if ($tags['db.engine'] === 'sqlite') {
+            return $dsn ? basename($dsn) : 'PDO';
+        }
+
+        preg_match('@db(?:-master|-replica)?-([0-9a-z-]*)\.(?:query|service)\.seatgeek\.@', $dsn, $match);
+        if ($match) {
+            return sprintf('db-%s', $match[1]);
+        }
+
+        return defined('DEFAULT_DATABASE_SERVICE_NAME') ? DEFAULT_DATABASE_SERVICE_NAME : 'PDO';
     }
 
     public static function storeStatementFromConnection($pdo, $stmt)
@@ -241,5 +269,16 @@ class PDOSandboxedIntegration extends SandboxedIntegration
         foreach (self::$connections[self::$statements[$stmtHash]] as $tag => $value) {
             $span->meta[$tag] = $value;
         }
+    }
+
+    public static function getServiceNameForPDO(PDO $pdo)
+    {
+        return self::$connections[spl_object_hash($pdo)][Tag::SERVICE_NAME] ?? 'PDO';
+    }
+
+    public static function getServiceNameForStatement(PDOStatement $statement)
+    {
+        $pdoHash = self::$statements[spl_object_hash($statement)];
+        return self::$connections[$pdoHash][Tag::SERVICE_NAME] ?? 'PDO';
     }
 }
