@@ -7,7 +7,8 @@ namespace DDTrace\Bridge;
  */
 class RequiredDepsAutoloader
 {
-    private static $skipLoader = false;
+    // Disabled because something is loading files twice
+    private static $skipLoader = true;
 
     /**
      * @param string $class
