@@ -412,7 +412,7 @@ class MysqliIntegration extends Integration
         /** @var \DDTrace\Span $span */
         $span = $scope->getSpan();
         $span->setTag(Tag::SPAN_TYPE, Type::SQL);
-        $span->setTag(Tag::SERVICE_NAME, 'mysqli');
+        $span->setTag(Tag::SERVICE_NAME, defined('DEFAULT_DATABASE_SERVICE_NAME') ? DEFAULT_DATABASE_SERVICE_NAME : 'mysqli');
         $span->setTag(Tag::RESOURCE_NAME, $resource);
         return $scope;
     }

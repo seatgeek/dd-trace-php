@@ -241,7 +241,7 @@ class MysqliSandboxedIntegration extends SandboxedIntegration
         $span->name = $name;
         $span->resource = $resource;
         $span->type = Type::SQL;
-        $span->service = 'mysqli';
+        $span->service = defined('DEFAULT_DATABASE_SERVICE_NAME') ? DEFAULT_DATABASE_SERVICE_NAME : 'mysqli';
     }
 
     /**
