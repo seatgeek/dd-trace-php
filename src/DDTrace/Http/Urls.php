@@ -68,7 +68,12 @@ class Urls
      */
     public static function hostnameForTag($url)
     {
-        return 'host-' . self::hostname($url);
+        $hostname = self::hostname($url);
+        if (is_numeric(substr($hostname, 0, 1))) {
+            return 'host-' . $hostname;
+        }
+
+        return preg_replace('@\.(service|query)\.seatgeek\.[a-z]+@', '', $hostname);
     }
 
     /**
